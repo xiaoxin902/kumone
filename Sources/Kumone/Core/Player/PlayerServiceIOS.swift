@@ -1047,10 +1047,11 @@ final class PlayerService: ObservableObject {
         resumeAt: TimeInterval = 0
     ) async -> ResolvedURLLoadResult {
         // Resolve the audio track before the item goes live: an audio mix attached
-        // after playback starts is silently ignored. The one tap now drives both
-        // the spectrum and iOS equalizer, so local/cache/offline assets take the
-        // same path as remote streams. Unsupported sources still play untouched.
-        let assetTrack = await loadAudioTrack(from: asset, timeout: 2)
+        // after playback starts is silently ignored. Local files, including cache
+        // hits and downloads, play without a tap and use the decorative fallback.
+        let assetTrack = asset.url.isFileURL
+            ? nil
+            : await loadAudioTrack(from: asset, timeout: 2)
         guard generation == resolveGeneration,
               resourceLoader.map({ pendingAudioResourceLoader === $0 }) ?? true else {
             resourceLoader?.cancel()

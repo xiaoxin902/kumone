@@ -1,0 +1,76 @@
+name: Kumone iOS audio verification
+
+on:
+  push:
+    branches:
+      - ios-v031-audio
+
+permissions:
+  contents: read
+
+jobs:
+  ios-build:
+    name: Build unsigned iOS IPA
+    runs-on: xcode-27
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify iOS SDK and Swift versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          sdk_version=$(xcrun --sdk iphoneos --show-sdk-version)
+          swift_output=$(xcrun swift --version)
+          printf 'iOS SDK: %s\n%s\n' "$sdk_version" "$swift_output"
+          swift_version=$(awk '/Swift version/ { for (i=1; i<NF; i++) if ($i=="version") { print $(i+1); exit } }' <<< "$swift_output")
+          version_at_least() {
+            local current=$1 required_major=$2 required_minor=$3 major minor
+            [[ $current =~ ^([0-9]+)\.([0-9]+)(\.[0-9]+)*$ ]] || return 1
+            major=$((10#${BASH_REMATCH[1]}))
+            minor=$((10#${BASH_REMATCH[2]}))
+            (( major > required_major || (major == required_major && minor >= required_minor) ))
+          }
+          if ! version_at_least "$sdk_version" 27 1 || ! version_at_least "$swift_version" 6 2; then
+            echo '::error title=Unsupported Xcode image::This build requires iOS SDK 27.1 or newer and Swift 6.2 or newer.'
+            exit 1
+          fi
+
+      - name: Compile iOS without signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_number=$(git rev-list --count HEAD)
+          xcodebuild -workspace ios/KumoneIOS.xcworkspace -scheme KumoneIOS \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath "${RUNNER_TEMP:?}/ios-dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            MARKETING_VERSION=0.3.38 CURRENT_PROJECT_VERSION="$build_number" \
+            build
+
+      - name: Archive unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="${RUNNER_TEMP:?}/ios-dd/Build/Products/Release-iphoneos/KumoneIOS.app"
+          if [[ ! -d "$app" ]]; then
+            echo '::error title=Missing iOS build::KumoneIOS.app was not found in the Release-iphoneos products.'
+            exit 1
+          fi
+          staging=$(mktemp -d "${RUNNER_TEMP:?}/kumone-ipa.XXXXXX")
+          mkdir -p "${staging:?}/Payload" "${GITHUB_WORKSPACE:?}/dist"
+          cp -R "$app" "${staging:?}/Payload/"
+          ipa="${GITHUB_WORKSPACE:?}/dist/Kumone-iOS-unsigned.ipa"
+          (cd "${staging:?}" && zip -qry "${ipa:?}" Payload)
+          unzip -tq "$ipa"
+
+      - name: Upload unsigned IPA to Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: kumone-ios-audio-unsigned
+          path: dist/Kumone-iOS-unsigned.ipa
+          if-no-files-found: error

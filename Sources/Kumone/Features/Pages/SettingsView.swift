@@ -8,8 +8,8 @@ import Combine
 /// `SettingsView`. Present it from the app's root (`presentSettingsSheet`).
 ///
 /// Presented from inside the Library tab, the sheet was re-hosted whenever
-/// the tab view updated, so changing a setting from a pushed page (picking a
-/// sound effect, say) reset the stack and popped the page back to the root.
+/// the tab view updated, so changing a setting from a pushed page could reset
+/// the stack and pop the page back to the root.
 /// It also keeps the stack apart from `SettingsView`, which re-renders on
 /// every settings change.
 struct SettingsSheet: View {
@@ -35,8 +35,6 @@ struct SettingsSheet: View {
                             dismiss()
                             openDestination(.downloaded)
                         }
-                    case .soundEffects:
-                        SoundEffectsPage()
                     }
                 }
         }
@@ -55,9 +53,6 @@ struct SettingsView: View {
 
     fileprivate enum SettingsPage: Hashable {
         case storage
-        #if os(iOS)
-        case soundEffects
-        #endif
         #if os(macOS)
         case shortcuts
         #endif
@@ -98,18 +93,6 @@ struct SettingsView: View {
                 Text("无损与 Hi-Res 需要黑胶 VIP，未开通时自动回落到可用音质")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                #if os(iOS)
-                NavigationLink(value: SettingsPage.soundEffects) {
-                    HStack {
-                        Text("音效")
-                        Spacer()
-                        Text(settings.soundEffectPreset.displayName)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .accessibilityValue(settings.soundEffectPreset.displayName)
-                .accessibilityIdentifier("settingsSoundEffectsButton")
-                #endif
                 Toggle("灰色歌曲解锁", isOn: $settings.enableUnblock)
                 Text("无版权或下架歌曲将从已启用音源中匹配播放")
                     .font(.caption)

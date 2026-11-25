@@ -189,12 +189,6 @@ private final class SpectrumStore: @unchecked Sendable {
     private var channelCount = 2
     private var isInterleaved = true
 
-    #if os(iOS)
-    /// The same tap performs both jobs: shape the PCM first, then analyze what
-    /// the listener will actually hear. It owns only preallocated storage.
-    private let equalizer = GraphicEqualizerDSP()
-    #endif
-
     /// Band definitions resolved to bin indices for the current sample rate.
     private let binLo: UnsafeMutablePointer<Int32>
     private let binHi: UnsafeMutablePointer<Int32>
@@ -342,9 +336,6 @@ private final class SpectrumStore: @unchecked Sendable {
         sampleRate = format.mSampleRate > 0 ? format.mSampleRate : 44_100
         channelCount = max(1, Int(format.mChannelsPerFrame))
         isInterleaved = (format.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
-        #if os(iOS)
-        equalizer.configure(format: format)
-        #endif
 
         // Resolve each band to bin indices once, here, so the process callback
         // touches nothing but plain buffers — iterating a Swift array of tuples
@@ -420,9 +411,6 @@ private final class SpectrumStore: @unchecked Sendable {
 
     fileprivate func process(_ bufferList: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
         guard frames > 0 else { return }
-        #if os(iOS)
-        equalizer.process(bufferList, frames: frames)
-        #endif
         let abl = UnsafeMutableAudioBufferListPointer(bufferList)
         guard let first = abl.first, let raw = first.mData else { return }
 
